@@ -489,6 +489,11 @@ void draw_text(float2 pos, float size, float3 col, const char *text)
     // TODO: check vertex / index buffer overflows
 
     for (size_t i = 0; i < len; i++) {
+        char c = text[i];
+        if (c == ' ') {
+            continue;
+        }
+
         float2 vertices[4] = {
             {pos.x + i * size, pos.y + size},  // top left
             {pos.x + i * size + size, pos.y + size}, // top right
@@ -496,7 +501,6 @@ void draw_text(float2 pos, float size, float3 col, const char *text)
             {pos.x + i * size, pos.y}, // bottom left
         };
 
-        char c = text[i];
         c -= TOP_LEFT;
         float2 bitmapPos = FLOAT2(c % CELLS_PER_ROW, c / CELLS_PER_ROW);
         bitmapPos = divf2(bitmapPos, FLOAT2(CELLS_PER_ROW, CELLS_PER_COLUMN));
