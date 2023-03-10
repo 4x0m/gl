@@ -16,6 +16,14 @@ void draw_rect(float2 top_left, float2 size, float3 col);
 void draw_quad(float2 a, float2 b, float2 c, float2 d, float3 col);
 void draw_triangle(float2 a, float2 b, float2 c, float3 col);
 
-void draw_text(float2 pos, float size, const char* text, float3 col);
+void draw_text(float2 pos, float size, float3 col, const char* text);
+void draw_textf_i(float2 pos, float size, float3 col, const char* fmt, ...);
+#define draw_textf(pos, size, col, ...) \
+    do { \
+        /* This is a hack to get the compiler to check the format string */ \
+        const char dummy = sizeof(printf(__VA_ARGS__)); \
+        (void)dummy; \
+    } while (0); \
+    draw_textf_i(pos, size, col, __VA_ARGS__)
 
 #endif // RENDER2D_H

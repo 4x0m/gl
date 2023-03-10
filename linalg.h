@@ -2,6 +2,7 @@
 #define LINALG_H
 
 #include <math.h>
+#include <stdint.h>
 
 #define PI 3.14159265358979323846f
 #define DEG_TO_RAD 0.0174532925f // pi / 180.0f
@@ -10,6 +11,9 @@
 typedef float rad;
 #define RAD(x) (x)
 #define DEG(x) ((x) * DEG_TO_RAD)
+
+typedef int32_t i32;
+typedef uint32_t u32;
 
 inline rad normalize(rad angle) {
     angle = fmodf(angle, 2.0f * PI);
@@ -36,7 +40,7 @@ typedef struct {
     float x;
     float y;
 } float2;
-#define FLOAT2(x, y) ((float2){x, y})
+#define FLOAT2(x, y) ((float2){(float)(x), (float)(y)})
 
 typedef struct {
     float x;

@@ -1,4 +1,5 @@
 #include "linalg.h"
+#include "gl_utils.h"
 #include "render2d.h"
 #include <stdio.h>
 
@@ -22,14 +23,27 @@ void tick(float dt)
     float2 d = rotatef2(FLOAT2(-0.25f,  0.25f), angle);
     draw_quad(a, b, c, d, GREEN);
 
-    draw_text(bcastf2(-0.8f), 0.075f, "Hello world!", WHITE);
-    draw_text(FLOAT2(0, 0.8f), 0.075f, "Meep Moop", WHITE);
+    draw_text(bcastf2(-0.8f), 0.075f, WHITE, "Hello world!");
+    // draw_text(FLOAT2(0, 0.8f), 0.075f, GREEN, "Meep Moop");
+
+    static int seconds = 0;
+    static float time = 0.0f;
+    time += dt;
+    if (time > 1.0f) {
+        time -= 1.0f;
+        seconds++;
+    }
+
+    draw_textf(FLOAT2(-0.8f, 0.8f), 0.075f, GREEN, "Started %ds ago", seconds);
 }
 
 int main(int argc, char *argv[])
 {
+    UNUSED(argc);
+    UNUSED(argv);
+
     make_window(INT2(100, 100), INT2(800, 600), "2D Render Test");
-    load_font("../ExportedFont.bmp");
+    load_font("../ExportedFont.png");
 
     printf("Hello 2D Render Test!\n");
 

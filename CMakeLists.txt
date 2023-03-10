@@ -17,5 +17,6 @@ set(CMAKE_C_STANDARD_REQUIRED TRUE)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-add_executable(hello main.c render2d.c)
+add_compile_options(/W4 /WX)
+add_executable(hello main.c gl_utils.c render2d.c)
 target_link_libraries(hello PRIVATE SDL2::SDL2 SDL2::SDL2main SDL2::SDL2_image OpenGL::GL GLEW::GLEW)

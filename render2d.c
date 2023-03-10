@@ -1,6 +1,6 @@
 #include "render2d.h"
 
-#include <GL/glew.h> // glew header contains magic -> must be included BEFORE any other opengl header
+#include "gl_utils.h"
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
 #include <SDL_image.h>
@@ -18,35 +18,32 @@
 //     float3 col;
 // } vertex;
 
-typedef struct {
-    float2 pos;
-    float3 col;
-    float2 tex;
-} tex_vertex;
+typedef GLuint glid;
 
 typedef struct {
     float2 pos;
     float2 tex;
+    float3 col;
 } text_vertex;
 
 typedef struct {
-    GLuint shader;
-    GLuint vao;
-    GLuint vertex_buffer;
-    GLuint index_buffer;
+    glid shader;
+    glid vao;
+    glid vertex_buffer;
+    glid index_buffer;
     bool is_indexed;
-    size_t n_vertices;
-    size_t n_indices;
+    u32 n_vertices;
+    u32 n_indices;
 } render_step;
 
 typedef struct {
-    GLuint shader;
-    GLuint vao;
-    GLuint font_texture;
-    GLuint vertex_buffer;
-    GLuint index_buffer;
-    size_t n_vertices;
-    size_t n_indices;
+    glid shader;
+    glid vao;
+    glid font_texture;
+    glid vertex_buffer;
+    glid index_buffer;
+    u32 n_vertices;
+    u32 n_indices;
 } text_render_step;
 
 typedef struct {
@@ -54,8 +51,6 @@ typedef struct {
 } settings;
 
 // Internal functions
-static const char *getGLErrorStr(GLenum err);
-static void raiseGlError(GLenum err, const char *call, const char *file, int line);
 static void do_render();
 
 // Internal globals / state
@@ -64,111 +59,6 @@ static SDL_GLContext g_glcontext;
 static settings g_settings;
 static render_step g_render_triangles;
 static text_render_step g_render_text;
-
-static const char *getGLErrorStr(GLenum err)
-{
-    switch (err)
-    {
-    case GL_NO_ERROR:          return "No error";
-    case GL_INVALID_ENUM:      return "Invalid enum";
-    case GL_INVALID_VALUE:     return "Invalid value";
-    case GL_INVALID_OPERATION: return "Invalid operation";
-    case GL_STACK_OVERFLOW:    return "Stack overflow";
-    case GL_STACK_UNDERFLOW:   return "Stack underflow";
-    case GL_OUT_OF_MEMORY:     return "Out of memory";
-    default:                   return "Unknown error";
-    }
-}
-
-static void raiseGlError(GLenum err, const char *call, const char *file, int line)
-{
-    const int NMaxErrors = 10;
-
-    int nErrors = 0;
-    while (err != GL_NO_ERROR && nErrors < NMaxErrors)
-    {
-        if (call != NULL)
-        {
-            printf("%s:%d: %s raised Error %u (%s).\n", file, line, call, err, getGLErrorStr(err));
-        }
-        else
-        {
-            printf("%s:%d: Caught Error %u (%s).\n", file, line, err, getGLErrorStr(err));
-        }
-
-        err = glGetError();
-        nErrors++;
-    }
-
-    if (nErrors >= NMaxErrors)
-    {
-        printf("Stopped after %d errors. Too many errors could be a sign of a missing GL Context!\n", NMaxErrors);
-    }
-
-    if (nErrors > 0)
-    {
-        abort();
-    }
-}
-#ifndef NO_GL_ERROR_CHECK
-#define GL_CALL(fnCall) fnCall; raiseGlError(glGetError(), #fnCall, __FILE__, __LINE__)
-#else
-#define GL_CALL(fnCall) fnCall
-#endif
-
-static GLuint compile_shader(const char* vertex, const char* fragment, const char* frag_bind)
-{
-    // Shader Loading
-    // 1. Create shader and load source
-    GLuint vertexShader = GL_CALL(glCreateShader(GL_VERTEX_SHADER));
-    GL_CALL(glShaderSource(vertexShader, 1, &vertex, NULL));
-
-    // 2. Compile shader + check for compiler errors
-    GL_CALL(glCompileShader(vertexShader));
-    GLint status;
-    GL_CALL(glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &status));
-    if (status == GL_TRUE) printf("Compile Vertex Shader: SUCCESS\n");
-    else
-    {
-        char buffer[512];
-        GL_CALL(glGetShaderInfoLog(vertexShader, 512, NULL, buffer));
-        printf("ERROR: Vertex Shader compilation failed:\n%s\n", buffer);
-        abort();
-    }
-
-    // Repeat 1. + 2. for fragment shader
-    GLuint fragmentShader = GL_CALL(glCreateShader(GL_FRAGMENT_SHADER));
-    GL_CALL(glShaderSource(fragmentShader, 1, &fragment, NULL));
-    GL_CALL(glCompileShader(fragmentShader));
-    GL_CALL(glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &status));
-    if (status == GL_TRUE) printf("Compile Fragment Shader: SUCCESS\n");
-    else
-    {
-        char buffer[512];
-        GL_CALL(glGetShaderInfoLog(fragmentShader, 512, NULL, buffer));
-        printf("ERROR: Fragment Shader compilation failed:\n%s\n", buffer);
-        abort();
-    }
-
-    // 3. Combine shaders into program
-    GLuint program = GL_CALL(glCreateProgram());
-    GL_CALL(glAttachShader(program, vertexShader));
-    GL_CALL(glAttachShader(program, fragmentShader));
-
-    // 4. Map Fragment Shader output to framebuffers
-    GL_CALL(glBindFragDataLocation(program, 0, frag_bind));
-
-    // 5. Link Program
-    GL_CALL(glLinkProgram(program));
-
-    // 5.1 Check for linking errors (TODO)
-
-    // 5.2 Delete shaders (marked for deletion, deleted on program deletion)
-    GL_CALL(glDeleteShader(vertexShader));
-    GL_CALL(glDeleteShader(fragmentShader));
-
-    return program;
-}
 
 static void do_render()
 {
@@ -187,7 +77,7 @@ static void do_render()
 
 void load_font(const char *bitmap_file)
 {
-    SDL_Surface *surface = SDL_LoadBMP(bitmap_file);
+    SDL_Surface *surface = IMG_Load(bitmap_file);
     if (surface == NULL)
     {
         printf("Failed to load font bitmap '%s': %s\n", bitmap_file, SDL_GetError());
@@ -201,7 +91,7 @@ void load_font(const char *bitmap_file)
     GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
     GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
     GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
-    GL_CALL(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, surface->w, surface->h, 0, GL_RGB, GL_UNSIGNED_BYTE, surface->pixels));
+    GL_CALL(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, surface->w, surface->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, surface->pixels));
 
     SDL_FreeSurface(surface);
 }
@@ -228,10 +118,10 @@ void make_window(int2 top_left, int2 size, const char* title)
 
     glewExperimental = true; // Enable modern OpenGL features
     // glewInit must be called _AFTER_ creating openGL context
-    GLenum err = glewInit();
-    if (GLEW_OK != err)
+    GLenum glew_err = glewInit();
+    if (GLEW_OK != glew_err)
     {
-        printf("glewInit() failed! Error: %s\n", glewGetErrorString(err));
+        printf("glewInit() failed! Error: %s\n", glewGetErrorString(glew_err));
         abort();
     }
 
@@ -327,7 +217,7 @@ void make_window(int2 top_left, int2 size, const char* title)
         "}\n";
 
     // Create shader program
-    g_render_triangles.shader = compile_shader(vertexSource, fragmentSource, "outColor");
+    g_render_triangles.shader = gl_compile_shader(vertexSource, fragmentSource, "outColor");
 
     // 6. Use program
     GL_CALL(glUseProgram(g_render_triangles.shader));
@@ -379,7 +269,7 @@ void make_window(int2 top_left, int2 size, const char* title)
     // Create vertex buffer
     GL_CALL(glGenBuffers(1, &g_render_text.vertex_buffer));
     GL_CALL(glBindBuffer(GL_ARRAY_BUFFER, g_render_text.vertex_buffer));
-    GL_CALL(glBufferData(GL_ARRAY_BUFFER, PREALLOC_VERTICES*sizeof(tex_vertex), NULL, GL_DYNAMIC_DRAW));
+    GL_CALL(glBufferData(GL_ARRAY_BUFFER, PREALLOC_VERTICES*sizeof(text_vertex), NULL, GL_DYNAMIC_DRAW));
 
     // Create index buffer
     GL_CALL(glGenBuffers(1, &g_render_text.index_buffer));
@@ -391,11 +281,14 @@ void make_window(int2 top_left, int2 size, const char* title)
         "// input\n"
         "layout(location = 0) in vec2 position; // input 2d position of vertice\n"
         "layout(location = 1) in vec2 texcoordVertex; // 2d texture coordinate\n"
+        "layout(location = 2) in vec3 colorVertex; // color of vertex\n"
         "// output\n"
         "out vec2 texcoordFragment; // 2d texture coord (rasterized)\n"
+        "out vec3 colorFragment; // color of vertex (rasterized)\n"
         "void main()\n"
         "{\n"
         "    texcoordFragment = texcoordVertex;\n"
+        "    colorFragment = colorVertex;\n"
         "    // Map 2d position of triangle vertice onto 3d space\n"
         "    gl_Position = vec4(position, 0.0, 1.0);\n"
         "}\n";
@@ -405,13 +298,14 @@ void make_window(int2 top_left, int2 size, const char* title)
         "// Texture to draw, defaults to 0, so doesn't have to be set on host if only one texture\n"
         "uniform sampler2D font_texture;\n"
         "in vec2 texcoordFragment;\n"
+        "in vec3 colorFragment;\n"
         "out vec4 outColor;\n"
         "void main()\n"
         "{\n"
-        "    outColor = texture(font_texture, texcoordFragment);\n"
+        "    outColor = vec4(colorFragment, 1.0) * texture(font_texture, texcoordFragment);\n"
         "}\n";
 
-    g_render_text.shader = compile_shader(textVertexSource, textFragmentSource, "outColor");
+    g_render_text.shader = gl_compile_shader(textVertexSource, textFragmentSource, "outColor");
 
     GL_CALL(glUseProgram(g_render_text.shader));
 
@@ -427,6 +321,10 @@ void make_window(int2 top_left, int2 size, const char* title)
     GLint texcoord_attrib_text = 1; //GL_CALL(glGetAttribLocation(g_render_text.shader, "texcoordVertex"));
     GL_CALL(glEnableVertexAttribArray(texcoord_attrib_text));
     GL_CALL(glVertexAttribPointer(texcoord_attrib_text, 2, GL_FLOAT, GL_FALSE, sizeof(text_vertex), (void*)(2*sizeof(float))));
+
+    GLint color_attrib_text = 2; // GL_CALL(glGetAttribLocation(g_render_text.shader, "colorVertex"));
+    GL_CALL(glEnableVertexAttribArray(color_attrib_text));
+    GL_CALL(glVertexAttribPointer(color_attrib_text, 3, GL_FLOAT, GL_FALSE, sizeof(text_vertex), (void*)(4*sizeof(float))));
 }
 
 void teardown_window()
@@ -476,7 +374,8 @@ void main_loop(tick_func tick) {
             float ms_per_frame = 1000.f / g_settings.max_fps;
             float ms_per_frame_actual = 1000.f * (tick_end - tick_start) / (float)SDL_GetPerformanceFrequency();
             if (ms_per_frame_actual < ms_per_frame) {
-                SDL_Delay(ms_per_frame - ms_per_frame_actual);
+
+                SDL_Delay((u32)(ms_per_frame - ms_per_frame_actual));
             }
         }
     }
@@ -513,8 +412,8 @@ void draw_quad(float2 a, float2 b, float2 c, float2 d, float3 col)
     GL_CALL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_render_triangles.index_buffer));
 
     // Check if vertex buffer is large enough
-    size_t vertex_buffer_capacity;
-    GL_CALL(glGetBufferParameteri64v(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &vertex_buffer_capacity));
+    i32 vertex_buffer_capacity;
+    GL_CALL(glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &vertex_buffer_capacity));
     // printf("vertex_buffer_capacity: %zd\n", vertex_buffer_capacity);
     if (g_render_triangles.n_vertices + 4 > vertex_buffer_capacity / (5*sizeof(float))) {
         printf("Vertex buffer overflow, increase vertex buffer size\n");
@@ -522,8 +421,8 @@ void draw_quad(float2 a, float2 b, float2 c, float2 d, float3 col)
     }
 
     // Check if index buffer is large enough
-    size_t index_buffer_capacity;
-    GL_CALL(glGetBufferParameteri64v(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &index_buffer_capacity));
+    i32 index_buffer_capacity;
+    GL_CALL(glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &index_buffer_capacity));
     if (g_render_triangles.n_indices + 6 > index_buffer_capacity / sizeof(GLuint)) {
         printf("Index buffer overflow, increase index buffer size\n");
         abort();
@@ -572,21 +471,18 @@ void draw_quad(float2 a, float2 b, float2 c, float2 d, float3 col)
     g_render_triangles.n_indices += 6;
 }
 
-void draw_triangle(float2 a, float2 b, float2 c, float3 col)
-{
-    // TODO
-}
+// void draw_triangle(float2 a, float2 b, float2 c, float3 col)
+// {
+//     // TODO
+// }
 
-void draw_text(float2 pos, float size, const char *text, float3 col)
+void draw_text(float2 pos, float size, float3 col, const char *text)
 {
-    const int CELL_WIDTH = 32;
-    const int CELL_HEIGHT = 32;
     const char TOP_LEFT = '!' - 1;
     const int CELLS_PER_ROW = 16;
     const int CELLS_PER_COLUMN = 8;
     const float CELL_WIDTH_UV = 1.0f / CELLS_PER_ROW / 2.f;
     const float CELL_HEIGHT_UV = 1.0f / CELLS_PER_COLUMN;
-
 
     size_t len = strlen(text);
 
@@ -600,15 +496,10 @@ void draw_text(float2 pos, float size, const char *text, float3 col)
             {pos.x + i * size, pos.y}, // bottom left
         };
 
-        // draw_quad(vertices[0], vertices[1], vertices[2], vertices[3], col);
-        // continue;
-
         char c = text[i];
         c -= TOP_LEFT;
-        float2 bitmapPos = {c % CELLS_PER_ROW, c / CELLS_PER_ROW};
-        // printf("bitmapPos: %f, %f\n", bitmapPos.x, bitmapPos.y);
+        float2 bitmapPos = FLOAT2(c % CELLS_PER_ROW, c / CELLS_PER_ROW);
         bitmapPos = divf2(bitmapPos, FLOAT2(CELLS_PER_ROW, CELLS_PER_COLUMN));
-        // printf("bitmapPos (normalized): %f, %f\n", bitmapPos.x, bitmapPos.y);
 
         float2 bitmap_vertices[4] = {
             {bitmapPos.x, bitmapPos.y},  // top left
@@ -617,23 +508,12 @@ void draw_text(float2 pos, float size, const char *text, float3 col)
             {bitmapPos.x, bitmapPos.y + CELL_HEIGHT_UV}, // bottom left
         };
 
-        // printf("bitmap_vertices[0]: %f %f\n", bitmap_vertices[0].x, bitmap_vertices[0].y);
-        // printf("bitmap_vertices[1]: %f %f\n", bitmap_vertices[1].x, bitmap_vertices[1].y);
-        // printf("bitmap_vertices[2]: %f %f\n", bitmap_vertices[2].x, bitmap_vertices[2].y);
-        // printf("bitmap_vertices[3]: %f %f\n", bitmap_vertices[3].x, bitmap_vertices[3].y);
-
         text_vertex vs[4] = {
-            {vertices[0], bitmap_vertices[0]},
-            {vertices[1], bitmap_vertices[1]},
-            {vertices[2], bitmap_vertices[2]},
-            {vertices[3], bitmap_vertices[3]},
+            {vertices[0], bitmap_vertices[0], col},
+            {vertices[1], bitmap_vertices[1], col},
+            {vertices[2], bitmap_vertices[2], col},
+            {vertices[3], bitmap_vertices[3], col},
         };
-
-        // printf("char: %c\n", c);
-        // printf("bitmap_vertices[0]: %f %f  %f %f\n", vs[0].pos.x, vs[0].pos.y, vs[0].tex.x, vs[0].tex.y);
-        // printf("bitmap_vertices[1]: %f %f  %f %f\n", vs[1].pos.x, vs[1].pos.y, vs[1].tex.x, vs[1].tex.y);
-        // printf("bitmap_vertices[2]: %f %f  %f %f\n", vs[2].pos.x, vs[2].pos.y, vs[2].tex.x, vs[2].tex.y);
-        // printf("bitmap_vertices[3]: %f %f  %f %f\n", vs[3].pos.x, vs[3].pos.y, vs[3].tex.x, vs[3].tex.y);
 
         size_t offset = g_render_text.n_vertices * sizeof(text_vertex);
         GL_CALL(glNamedBufferSubData(g_render_text.vertex_buffer, offset, sizeof(vs), vs));
@@ -648,4 +528,38 @@ void draw_text(float2 pos, float size, const char *text, float3 col)
         g_render_text.n_vertices += 4;
         g_render_text.n_indices += 6;
     }
+}
+
+void draw_textf_i(float2 pos, float size, float3 col, const char* fmt, ...)
+{
+    char buf[256];
+    va_list args;
+    va_start(args, fmt);
+    int bytes_written = vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    if (bytes_written < 0) {
+        printf("Error: vsnprintf failed\n");
+        abort();
+    }
+
+    // fast path for small strings
+    if (bytes_written < sizeof(buf)) {
+        draw_text(pos, size, col, buf);
+        return;
+    }
+
+    // allocate a buffer large enough to hold the string
+    va_start(args, fmt);
+    bytes_written = vsnprintf(NULL, 0, fmt, args);
+    va_end(args);
+
+    char *large_buf = malloc(bytes_written + 1);
+
+    va_start(args, fmt);
+    vsnprintf(large_buf, bytes_written + 1, fmt, args);
+    va_end(args);
+
+    draw_text(pos, size, col, large_buf);
+    free(large_buf);
 }
