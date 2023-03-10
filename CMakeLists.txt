@@ -18,5 +18,29 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_compile_options(/W4 /WX)
-add_executable(hello main.c gl_utils.c render2d.c)
-target_link_libraries(hello PRIVATE SDL2::SDL2 SDL2::SDL2main SDL2::SDL2_image OpenGL::GL GLEW::GLEW)
+
+add_library(render2d STATIC
+    render2d.c
+    gl_utils.c
+)
+target_link_libraries(render2d PUBLIC
+    SDL2::SDL2
+    SDL2::SDL2main
+    SDL2::SDL2_image
+    OpenGL::GL
+    GLEW::GLEW
+)
+
+add_executable(renderTest
+    render_test.c
+)
+target_link_libraries(renderTest PRIVATE
+    render2d
+)
+
+add_executable(tetris
+    tetris.c
+)
+target_link_libraries(tetris PRIVATE
+    render2d
+)
